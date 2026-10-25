@@ -1,0 +1,47 @@
+---
+- name: Déployer l'app Flask dans Docker
+  hosts: all
+  become: true
+  vars:
+    image: "ton-user-dockerhub/flask-app:latest"
+    app_env: "dev"
+    container_name: flask-app
+
+  tasks:
+    - name: Installer Docker
+      ansible.builtin.apt:
+        name: docker.io
+        state: present
+        update_cache: true
+
+    - name: Démarrer Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Récupérer l'image
+      ansible.builtin.command: docker pull {{ image }}
+      changed_when: true
+
+    - name: Supprimer l'ancien conteneur
+      ansible.builtin.command: docker rm -f {{ container_name }}
+      failed_when: false
+      changed_when: true
+
+    - name: Lancer le nouveau conteneur
+      ansible.builtin.command: >
+        docker run -d --name {{ container_name }}
+        --restart unless-stopped
+        -p 80:8080 -e APP_ENV={{ app_env }}
+        {{ image }}
+      changed_when: true
+
+    - name: Vérifier que l'app répond
+      ansible.builtin.uri:
+        url: http://localhost/health
+        status_code: 200
+      register: health
+      retries: 5
+      delay: 3
+      until: health.status == 200

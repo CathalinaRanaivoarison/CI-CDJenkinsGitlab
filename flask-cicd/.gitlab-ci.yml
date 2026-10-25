@@ -1,0 +1,112 @@
+variables:
+  IMAGE_NAME: "$DOCKERHUB_USER/flask-app"
+  IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+  DOCKER_TLS_CERTDIR: "/certs"
+
+stages:
+  - quality
+  - test
+  - build
+  - test-image
+  - push
+  - deploy-staging
+  - deploy-prod
+
+# ---------- CI ----------
+
+code-quality:
+  stage: quality
+  image: python:3.12-slim
+  script:
+    - pip install -q flake8
+    - flake8 .
+
+unit-tests:
+  stage: test
+  image: python:3.12-slim
+  script:
+    - pip install -q -r requirements-dev.txt
+    - pytest -v
+
+build-image:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    - docker build -t $IMAGE_NAME:$IMAGE_TAG .
+    - docker save $IMAGE_NAME:$IMAGE_TAG -o image.tar
+  artifacts:
+    paths:
+      - image.tar
+    expire_in: 1 hour
+
+test-image:
+  stage: test-image
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    - apk add --no-cache curl
+    - docker load -i image.tar
+    - docker run -d --name test-app -p 8080:8080 $IMAGE_NAME:$IMAGE_TAG
+    - sleep 5
+    # avec dind, le conteneur est joignable via l'hôte "docker"
+    - curl -fs http://docker:8080 | grep -q "Hello World"
+    - curl -fs http://docker:8080/health | grep -q "ok"
+
+push-image:
+  stage: push
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    - docker load -i image.tar
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USER" --password-stdin
+    - docker tag $IMAGE_NAME:$IMAGE_TAG $IMAGE_NAME:latest
+    - docker push $IMAGE_NAME:$IMAGE_TAG
+    - docker push $IMAGE_NAME:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ---------- CD ----------
+
+.deploy-template: &deploy
+  image: python:3.12-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq openssh-client curl > /dev/null
+    - pip install -q ansible
+    - chmod 600 "$SSH_PRIVATE_KEY"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+deploy-staging:
+  <<: *deploy
+  stage: deploy-staging
+  environment:
+    name: staging
+    url: http://$STAGING_IP
+  script:
+    - >
+      ansible-playbook -i "$STAGING_IP," -u ubuntu --private-key "$SSH_PRIVATE_KEY"
+      -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
+      -e "image=$IMAGE_NAME:$IMAGE_TAG app_env=staging"
+      ansible/deploy.yml
+    - curl -fs http://$STAGING_IP | grep -q "Hello World"
+
+deploy-prod:
+  <<: *deploy
+  stage: deploy-prod
+  environment:
+    name: production
+    url: http://$PROD_IP
+  script:
+    - >
+      ansible-playbook -i "$PROD_IP," -u ubuntu --private-key "$SSH_PRIVATE_KEY"
+      -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
+      -e "image=$IMAGE_NAME:$IMAGE_TAG app_env=production"
+      ansible/deploy.yml
+    - curl -fs http://$PROD_IP | grep -q "Hello World"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
