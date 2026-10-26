@@ -2,7 +2,9 @@
 
 Pipeline CI/CD complet pour une application Python Flask : qualité de code, tests, build d'image Docker, publication sur Docker Hub et déploiement automatisé sur AWS EC2 avec Ansible.
 
-Basé sur [bennzhang/docker-demo-with-simple-python-app](https://github.com/bennzhang/docker-demo-with-simple-python-app), modernisé (Python 2.7 → 3.12, image slim, utilisateur non-root, tests, health check).
+![WebCurl](screenshot/CICD.png)
+
+Basé sur [bennzhang/docker-demo-with-simple-python-app](https://github.com/bennzhang/docker-demo-with-simple-python-app), modernisé (Python 2.7 → 3.14, image slim, utilisateur non-root, tests, health check).
 
 ## Pipeline
 
