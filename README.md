@@ -41,11 +41,13 @@ Code → Qualité (flake8) → Tests (pytest) → Build image → Test image →
 ## Lancer en local
 
 ```bash
-docker build -t flask-app .
-docker run -d -p 8080:8080 flask-app
-curl http://localhost:8080          # Hello World
-curl http://localhost:8080/health   # {"status":"ok"}
+docker build -t flask-app:v1 .
+docker run -d -p 8083:8080 flask-app:v1
+curl http://localhost:8083          # Hello World
+curl http://localhost:8083/health   # {"status":"ok"}
 ```
+![Curl](screenshot/curlflask.png)
+![WebCurl](screenshot/webcurl.png)
 
 ## Configuration Jenkins
 

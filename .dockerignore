@@ -5,3 +5,13 @@ tests
 ansible
 Jenkinsfile
 README.md
+Dockerfile
+.dockerignore
+.DS_Store
+.gitlab-ci.yml
+screenshot
+requirements-dev.txt
+pytest.ini
+.flake8
+.gitignore
+.pytest_cache
